@@ -8,3 +8,4 @@ llama-index-vector-stores-milvus
 pymilvus
 openai
 transformers
+Flask-Cors
