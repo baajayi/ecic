@@ -9,3 +9,5 @@ pymilvus
 openai
 transformers
 Flask-Cors
+scikit-learn==1.5.1
+scipy==1.14.0
