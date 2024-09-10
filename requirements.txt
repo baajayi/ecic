@@ -1,0 +1,10 @@
+llama_index.core
+flask
+python-dotenv
+llama-index-readers-file
+llama-index-embeddings-openai
+llama-index-llms-openai
+llama-index-vector-stores-milvus
+pymilvus
+openai
+transformers
