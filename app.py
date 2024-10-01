@@ -23,7 +23,10 @@ docs = []
 
 # Function to load markdown files
 def load_markdown_files(directory):
-    reader = SimpleDirectoryReader(directory, recursive=True)
+    allowed_extensions = [
+        '.pdf', '.md', '.markdown', '.txt', '.rtf',
+        '.doc', '.docx', '.xls', '.xlsx', '.csv']
+    reader = SimpleDirectoryReader(directory, recursive=True, required_exts=allowed_extensions)
     return reader.load_data()
 
 # Function to split text into chunks
@@ -79,7 +82,7 @@ else:
     for doc in docs:
         if hasattr(doc, 'text'):
             doc_text = doc.text
-            text_chunks = split_text(doc_text, max_tokens=8192)
+            text_chunks = split_text(doc_text, max_tokens=8000)
             embeddings = get_embeddings_for_text_chunks(text_chunks)
             all_embeddings.extend(embeddings)
             document_texts.extend(text_chunks)
