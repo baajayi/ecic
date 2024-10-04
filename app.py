@@ -1,9 +1,10 @@
 import os
+import boto3
 import json
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from openai import OpenAI
-from llama_index.core import SimpleDirectoryReader
+from llama_index.core import Document  # Import Document class
 from dotenv import load_dotenv, find_dotenv
 import tiktoken
 import concurrent.futures
@@ -17,17 +18,42 @@ CORS(app)  # Enable CORS
 # Load environment variables
 _ = load_dotenv(find_dotenv())
 
-
 client = OpenAI()
 docs = []
 
-# Function to load markdown files
-def load_markdown_files(directory):
+# Function to load files from AWS S3 bucket
+def load_markdown_files_from_s3(bucket_name, s3_prefix=''):
     allowed_extensions = [
         '.pdf', '.md', '.markdown', '.txt', '.rtf',
-        '.doc', '.docx', '.xls', '.xlsx', '.csv']
-    reader = SimpleDirectoryReader(directory, recursive=True, required_exts=allowed_extensions)
-    return reader.load_data()
+        '.doc', '.docx', '.xls', '.xlsx', '.csv'
+    ]
+    
+    acess_key = os.getenv("aws_access_key_id")
+    acess_secret = os.getenv("aws_secret_access_key")
+    # Initialize S3 client with your AWS credentials
+    s3 = boto3.client(
+        's3',
+        aws_access_key_id=acess_key,
+        aws_secret_access_key=acess_secret
+    )
+    
+    # Use paginator to handle large number of objects
+    paginator = s3.get_paginator('list_objects_v2')
+    page_iterator = paginator.paginate(Bucket=bucket_name, Prefix=s3_prefix)
+    
+    documents = []
+    for page in page_iterator:
+        if 'Contents' in page:
+            for obj in page['Contents']:
+                key = obj['Key']
+                if any(key.lower().endswith(ext) for ext in allowed_extensions):
+                    # Get object content
+                    response = s3.get_object(Bucket=bucket_name, Key=key)
+                    content = response['Body'].read().decode('utf-8', errors='ignore')
+                    # Create a Document object
+                    document = Document(text=content, doc_id=key)
+                    documents.append(document)
+    return documents
 
 # Function to split text into chunks
 def split_text(text, max_tokens, encoding_name="cl100k_base"):
@@ -74,7 +100,10 @@ if os.path.exists(embeddings_file) and os.path.exists(document_texts_file):
         document_texts = json.load(f)
 else:
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_docs = executor.submit(load_markdown_files, "ECIC_MDFiles").result()
+        # Replace 'your-bucket-name' with your actual bucket name
+        bucket_name = 'ecic-training-data'
+        s3_prefix = 'ECIC_MDFiles/'  # Specify if you have a prefix
+        future_docs = executor.submit(load_markdown_files_from_s3, bucket_name, s3_prefix).result()
     docs.extend(future_docs)
 
     all_embeddings = []
@@ -150,7 +179,6 @@ def ask():
     response = get_retrieval_augmented_response(query)
     print(f'{query}\n{response}')
     return jsonify({"response": response})
-
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=True)
