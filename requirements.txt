@@ -1,5 +1,6 @@
 llama_index.core
 flask
+boto3
 python-dotenv
 llama-index-readers-file
 llama-index-embeddings-openai
