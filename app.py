@@ -1,10 +1,11 @@
 import os
 import boto3
+import tempfile
 import json
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from openai import OpenAI
-from llama_index.core import Document  # Import Document class
+from llama_index.core import SimpleDirectoryReader  # Import Document class
 from dotenv import load_dotenv, find_dotenv
 import tiktoken
 import concurrent.futures
@@ -22,38 +23,46 @@ client = OpenAI()
 docs = []
 
 # Function to load files from AWS S3 bucket
+
 def load_markdown_files_from_s3(bucket_name, s3_prefix=''):
     allowed_extensions = [
         '.pdf', '.md', '.markdown', '.txt', '.rtf',
         '.doc', '.docx', '.xls', '.xlsx', '.csv'
     ]
     
-    acess_key = os.getenv("aws_access_key_id")
-    acess_secret = os.getenv("aws_secret_access_key")
+    access_key = os.getenv("aws_access_key_id")
+    access_secret = os.getenv("aws_secret_access_key")
+    
     # Initialize S3 client with your AWS credentials
     s3 = boto3.client(
         's3',
-        aws_access_key_id=acess_key,
-        aws_secret_access_key=acess_secret
+        aws_access_key_id=access_key,
+        aws_secret_access_key=access_secret
     )
     
     # Use paginator to handle large number of objects
     paginator = s3.get_paginator('list_objects_v2')
     page_iterator = paginator.paginate(Bucket=bucket_name, Prefix=s3_prefix)
     
-    documents = []
-    for page in page_iterator:
-        if 'Contents' in page:
-            for obj in page['Contents']:
-                key = obj['Key']
-                if any(key.lower().endswith(ext) for ext in allowed_extensions):
-                    # Get object content
-                    response = s3.get_object(Bucket=bucket_name, Key=key)
-                    content = response['Body'].read().decode('utf-8', errors='ignore')
-                    # Create a Document object
-                    document = Document(text=content, doc_id=key)
-                    documents.append(document)
+    # Create a temporary directory to store downloaded files
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        for page in page_iterator:
+            if 'Contents' in page:
+                for obj in page['Contents']:
+                    key = obj['Key']
+                    if any(key.lower().endswith(ext) for ext in allowed_extensions):
+                        # Preserve the directory structure
+                        local_path = os.path.join(tmpdirname, key)
+                        local_dir = os.path.dirname(local_path)
+                        os.makedirs(local_dir, exist_ok=True)
+                        # Download the object to the temporary directory
+                        s3.download_file(bucket_name, key, local_path)
+        
+        # Use SimpleDirectoryReader to read the files
+        documents = SimpleDirectoryReader(tmpdirname, recursive=True).load_data()
+        
     return documents
+
 
 # Function to split text into chunks
 def split_text(text, max_tokens, encoding_name="cl100k_base"):
@@ -154,7 +163,7 @@ def get_retrieval_augmented_response(prompt, model="text-embedding-ada-002"):
 
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": """You are a smart assistant
                  You answer questions based on the context provided.
