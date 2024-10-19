@@ -27,7 +27,7 @@ docs = []
 def load_markdown_files_from_s3(bucket_name, s3_prefix=''):
     allowed_extensions = [
         '.pdf', '.md', '.markdown', '.txt', '.rtf',
-        '.doc', '.docx', '.xls', '.xlsx', '.csv'
+        '.doc', '.docx', '.xls', '.xlsx', '.csv', '.epub', '.pptx', '.ppt',
     ]
     
     access_key = os.getenv("aws_access_key_id")
